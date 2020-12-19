@@ -1,0 +1,51 @@
+128 bit	key									128	10 rounds
+											192	12 rounds
+column major order							256	14 rounds
+
+char[16] - state
+	b0	b4	b8  b12
+	b1	b5	b9  b13
+	b2	b6	b10 b14
+	b3	b7	b11 b15
+
+key expander
+plaintext ^ part_of_key (XOR)
+{
+SubBytes   (substitution) // S Box
+ShiftRows  (permutation)
+		1st row - no change
+		2nd row - 1 to the left
+		3rd row - 2 to the left
+		4th row - 3 to the left
+MixColumns (permutation) // In all rounds except for the last one
+		// Matrix multiplication
+		2  3  1  1      c0
+		1  2  3  1  x   c1
+		1  1  2  3      c2
+		3  1  1  2      c3
+
+addRoundKey
+		for each column of state, xor with each column of key
+		(i.e. xor each corresponding byte)
+} // One round
+
+key scheduler
+{
+words in positions that are a multiple of 4 (W4, W8, ..., W40) are calculated by:
+applying the [RotWord(shift all bytes down)] and [SubBytes] transformation to the previous word Wi-1
+
+adding (XOR) this result to the word 4 positions earlier Wi-4
+plus a round constant [Rcon]
+
+	i-4        i-1 i
+	2b  28  ab  09
+	7e  ae  f7  cf
+	15  d2  15  4f
+	16  a6  88  3c
+
+	2b      8a
+	7e xor  84
+	15      eb
+	16      01
+        RotWord SubBytes
+}
