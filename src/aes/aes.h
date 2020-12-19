@@ -101,9 +101,18 @@ void RotWord(CHAR word[4])
 	word[3] = word[2];
 }
 
-void MakeRoundKey(CHAR src[16], CHAR dest[16])
+// 4x4 - 128
+// 4x6 - 192
+// 4x8 - 256
+void MakeRoundKey(CHAR src[Nk * 4], CHAR dest[Nk * 4])
 {
-
+	for (int i = 0; i < Nk; i++)
+	{
+		
+	}
 }
+
+#include <iostream>
+namespace AES { void Encrypt(const unsigned char* data, CHAR mode) { std::cout << "encrypted\n"; } }
 
 #endif // _AES_
