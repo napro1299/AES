@@ -1,0 +1,22 @@
+ca,c8,cb,cf,
+f7,f1,f6,fe,
+39,33,38,34,
+f3,fd,f2,e2
+
+1,2,3,4,5,6,7,8,9,a,b,c,d,e,f,10
+
+1  2  3  4
+5  6  7  8
+9  a  b  c
+d  e  f  10
+RW   SB    
+10   ca    ca
+4    f2 ^  f7
+8    30    39
+c    fe    f3 
+
+final key
+ca  c8 
+f7  f1
+39  33 
+f3  fd
