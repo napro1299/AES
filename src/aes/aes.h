@@ -13,8 +13,7 @@
 	#define Nr 14
 	#define Nk 8
 #else 
-	#define Nr 10
-	#define Nk 4
+	#error AES key size not defined (define AES128 AES192 AES256)
 #endif
 
 #define Nb 4
@@ -27,13 +26,13 @@
 
 /// AES header library ///
 
-using CHAR = uint8_t;
-using INT  = uint32_t;
+using u8  = uint8_t;
+using u32 = uint32_t;
 
 /// Look-up tables ///
 
 // Forward S-box
-static constexpr CHAR sbox[16][16] =
+static constexpr u8 sbox[16][16] =
 { 
 	0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
 	0xCA, 0x82, 0xC9, 0x7D, 0xFA, 0x59, 0x47, 0xF0, 0xAD, 0xD4, 0xA2, 0xAF, 0x9C, 0xA4, 0x72, 0xC0,
@@ -54,7 +53,7 @@ static constexpr CHAR sbox[16][16] =
 };
 
 // Inverse S-box
-static constexpr CHAR inv_sbox[16][16] =
+static constexpr u8 inv_sbox[16][16] =
 { 
 	0x52, 0x09, 0x6A, 0xD5, 0x30, 0x36, 0xA5, 0x38, 0xBF, 0x40, 0xA3, 0x9E, 0x81, 0xF3, 0xD7, 0xFB,
 	0x7C, 0xE3, 0x39, 0x82, 0x9B, 0x2F, 0xFF, 0x87, 0x34, 0x8E, 0x43, 0x44, 0xC4, 0xDE, 0xE9, 0xCB,
@@ -74,16 +73,18 @@ static constexpr CHAR inv_sbox[16][16] =
 	0x17, 0x2B, 0x04, 0x7E, 0xBA, 0x77, 0xD6, 0x26, 0xE1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0C, 0x7D 
 };
 
-/// Round constant
-static constexpr CHAR rcon[] =
+#define FIRST 0x0 
+
+// Round constant
+static constexpr u8 rcon[] =
 {
-	0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36
+	 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36
 };
 
 template<size_t N>
-void SubBytes(CHAR state[N]) 
+static void SubBytes(u8 state[N]) 
 {
-	CHAR ln, rn;
+	u8 ln, rn;
 	for (int i = 0; i < N; i++)
 	{	
 		ln = (state[i] & 0xf0) >> 4;
@@ -93,26 +94,56 @@ void SubBytes(CHAR state[N])
 	}
 }
 
-void RotWord(CHAR word[4])
+static void RotWord(u8 word[4])
 {
-	word[0] = word[3];
-	word[1] = word[0];
-	word[2] = word[1];
-	word[3] = word[2];
+	u8 temp[4];
+	temp[0] = word[1];
+	temp[1] = word[2];
+	temp[2] = word[3];
+	temp[3] = word[0];
+	
+	memcpy(word, temp, 4);
 }
 
 // 4x4 - 128
 // 4x6 - 192
 // 4x8 - 256
-void MakeRoundKey(CHAR src[Nk * 4], CHAR dest[Nk * 4])
+static void MakeRoundKey(u8 src[Nk * 4], u8 dest[Nk * 4], u8 key_index)
 {
-	for (int i = 0; i < Nk; i++)
+	u8 word[4];
+	
+	word[0] = src[Nk - 1];
+	word[1] = src[(Nk * 2) - 1];
+	word[2] = src[(Nk * 3) - 1];
+	word[3] = src[(Nk * 4) - 1];
+	
+	RotWord(word);
+	SubBytes<4>(word);
+	  
+	word[0] = src[0]      ^ word[0] ^ rcon[key_index]; // TODO: Investigate Rcon mechanics
+	word[1] = src[Nk]     ^ word[1];
+	word[2] = src[Nk * 2] ^ word[2];
+	word[3] = src[Nk * 3] ^ word[3];
+
+	dest[0]      = word[0];
+	dest[Nk]     = word[1];
+	dest[Nk * 2] = word[2];
+	dest[Nk * 3] = word[3];
+
+	for (int i = 1; i < 4; i++)
 	{
-		
+		word[0] = word[0] ^ src[i];
+		word[1] = word[1] ^ src[i + Nk];
+		word[2] = word[2] ^ src[i + (Nk * 2)];
+		word[3] = word[3] ^ src[i + (Nk * 3)];
+
+		dest[i] = word[0];
+		dest[i + Nk] = word[1];
+		dest[i + (Nk * 2)] = word[2];
+		dest[i + (Nk * 3)] = word[3];
 	}
 }
 
-#include <iostream>
-namespace AES { void Encrypt(const unsigned char* data, CHAR mode) { std::cout << "encrypted\n"; } }
+namespace AES {  }
 
 #endif // _AES_
