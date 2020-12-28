@@ -3,36 +3,28 @@
 #ifndef _AES_
 #define _AES_
 
-#ifdef AES128
-	#define Nr 10 // Number of rounds
-	#define Nk 4  // Size of round key (number of 32-bit words)
-#elif defined(AES192)
+#include <cstdint>
+#include <cstring>
+
+#if defined(AES192)
 	#define Nr 12
 	#define Nk 6
 #elif defined(AES256)
 	#define Nr 14
 	#define Nk 8
 #else 
-	#error AES key size not defined (define AES128 AES192 AES256)
+	#define Nr 10 // Number of rounds
+	#define Nk 4  // Size of round key (number of 32-bit words)
 #endif
 
-#define Nb 4
+#define Nb 4 // number of columns in a state 
 
-/**
-* Include this file before any other dependencies
-*/
-
-#include <cstdint>
+#define SCOPE(x) {x}
 
 /// AES header library ///
 
-using u8  = uint8_t;
-using u32 = uint32_t;
-
-/// Look-up tables ///
-
 // Forward S-box
-static constexpr u8 sbox[16][16] =
+static constexpr uint8_t sbox[] =
 { 
 	0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
 	0xCA, 0x82, 0xC9, 0x7D, 0xFA, 0x59, 0x47, 0xF0, 0xAD, 0xD4, 0xA2, 0xAF, 0x9C, 0xA4, 0x72, 0xC0,
@@ -53,7 +45,7 @@ static constexpr u8 sbox[16][16] =
 };
 
 // Inverse S-box
-static constexpr u8 inv_sbox[16][16] =
+static constexpr uint8_t inv_sbox[] =
 { 
 	0x52, 0x09, 0x6A, 0xD5, 0x30, 0x36, 0xA5, 0x38, 0xBF, 0x40, 0xA3, 0x9E, 0x81, 0xF3, 0xD7, 0xFB,
 	0x7C, 0xE3, 0x39, 0x82, 0x9B, 0x2F, 0xFF, 0x87, 0x34, 0x8E, 0x43, 0x44, 0xC4, 0xDE, 0xE9, 0xCB,
@@ -73,30 +65,38 @@ static constexpr u8 inv_sbox[16][16] =
 	0x17, 0x2B, 0x04, 0x7E, 0xBA, 0x77, 0xD6, 0x26, 0xE1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0C, 0x7D 
 };
 
-#define FIRST 0x0 
-
 // Round constant
-static constexpr u8 rcon[] =
+static constexpr uint8_t rcon[] =
 {
-	 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36
+	 0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36
 };
 
-template<size_t N>
-static void SubBytes(u8 state[N]) 
+static inline void subb(uint8_t state[Nb * Nb])
 {
-	u8 ln, rn;
-	for (int i = 0; i < N; i++)
+	for (int i = 0; i < Nb * Nb; i++)
 	{	
-		ln = (state[i] & 0xf0) >> 4;
-		rn = (state[i] & 0x0f);
-
-		state[i] = sbox[ln][rn];	
+		state[i] = sbox[state[i]];
+	}
+}
+static inline void inv_subb(uint8_t state[Nb * Nb])
+{
+	for (int i = 0; i < Nb * Nb; i++)
+	{
+		state[i] = inv_sbox[state[i]];
 	}
 }
 
-static void RotWord(u8 word[4])
+static inline void subw(uint8_t word[4])
 {
-	u8 temp[4];
+	word[0] = sbox[word[0]];
+	word[1] = sbox[word[1]];
+	word[2] = sbox[word[2]];
+	word[3] = sbox[word[3]];
+}
+
+static inline void rotword(uint8_t word[4])
+{
+	uint8_t temp[4];
 	temp[0] = word[1];
 	temp[1] = word[2];
 	temp[2] = word[3];
@@ -108,9 +108,10 @@ static void RotWord(u8 word[4])
 // 4x4 - 128
 // 4x6 - 192
 // 4x8 - 256
-static void MakeRoundKey(u8 src[Nk * 4], u8 dest[Nk * 4], u8 key_index)
+#if 0
+static void MakeRoundKey(uint8_t src[Nk * 4], uint8_t dest[Nk * 4], uint8_t key_index)
 {
-	u8 word[4];
+	uint8_t word[4];
 	
 	word[0] = src[Nk - 1];
 	word[1] = src[(Nk * 2) - 1];
@@ -143,7 +144,107 @@ static void MakeRoundKey(u8 src[Nk * 4], u8 dest[Nk * 4], u8 key_index)
 		dest[i + (Nk * 3)] = word[3];
 	}
 }
+#endif
 
-namespace AES {  }
+static void key_expand(const uint8_t* key_in, uint8_t* key_out) 
+{
+	uint8_t word[4];
+
+	memcpy(key_out, key_in, Nk * 4);
+	
+	for (unsigned int i = Nk; i < Nb * (Nr + 1); i++) // 44
+	{
+		word[0] = key_out[((i - 1) * 4) + 0];
+		word[1] = key_out[((i - 1) * 4) + 1];
+		word[2] = key_out[((i - 1) * 4) + 2];
+		word[3] = key_out[((i - 1) * 4) + 3]; 
+
+		if (i % Nk == 0)
+		{
+			rotword(word);
+			subw(word);
+			word[0] = word[0] ^ rcon[i / Nk];
+		}
+#ifdef AES256
+		if (i % Nk == 4)
+			subw(word);
+#endif
+		key_out[(i * 4) + 0] = key_out[((i - Nk) * 4) + 0] ^ word[0];
+		key_out[(i * 4) + 1] = key_out[((i - Nk) * 4) + 1] ^ word[1]; 
+		key_out[(i * 4) + 2] = key_out[((i - Nk) * 4) + 2] ^ word[2];
+		key_out[(i * 4) + 3] = key_out[((i - Nk) * 4) + 3] ^ word[3];
+	}
+}
+
+static void add_rk(uint8_t round, uint8_t* state, const uint8_t* rkey)
+{
+	for (int i = 0; i < Nb * Nb; i++)
+		state[i] ^= rkey[i];
+}
+
+static void shift_rows(uint8_t* state)
+{
+
+}
+
+static void mix_columns(uint8_t* state)
+{
+
+}
+
+static void inv_shift_rows(uint8_t* state)
+{
+
+}
+
+static void inv_mix_columns(uint8_t* state)
+{
+
+}
+
+static void cipher(uint8_t* state, const uint8_t* key)
+{
+	add_rk(0, state, key);
+
+	for (int r = 0;; r++)
+	{
+		subb(state);
+		shift_rows(state);
+		if (r == Nr)
+			break;
+		mix_columns(state);
+		add_rk(r, state, key);
+	}
+	add_rk(Nr, state, key);
+}
+
+static void inv_cipher(uint8_t* state, const uint8_t* key)
+{
+	add_rk(Nr, state, key);
+
+	for (int r = Nr - 1;; r--)
+	{
+		inv_shift_rows(state);
+		inv_subb(state);
+		add_rk(r, state, key);
+		if (r == 0)
+			break;
+		inv_mix_columns(state);
+	}
+}
+
+namespace AES { 
+
+	void encrypt(unsigned char* buf, unsigned char* key)
+	{
+		cipher(buf, key);
+	}
+
+	void decrypt(unsigned char* buf, unsigned char* key)
+	{
+		inv_cipher(buf, key);
+	}
+
+}
 
 #endif // _AES_
