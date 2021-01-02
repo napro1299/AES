@@ -262,7 +262,7 @@ static uint32_t mix_col(uint32_t w)
 #define COLTOW(arr, x, y, z, w) (arr[x]) ^	\
 						  (arr[y] << 8) ^	\
 					      (arr[z] << 16) ^	\
-						  (arr[w] << 24);	\
+						  (arr[w] << 24) 	\
 
 static void mix_columns(uint8_t* state)
 {
