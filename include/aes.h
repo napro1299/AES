@@ -5,19 +5,27 @@
 
 #include <cstdint>
 #include <cstring>
+#include <climits>
 
-#if defined(AES192)
-	#define Nr 12
-	#define Nk 6
+#ifdef AES192
+#define Nr           12
+#define Nk           6
+#define KEY_SIZE     24	
+#define EXP_KEY_SIZE 208
 #elif defined(AES256)
-	#define Nr 14
-	#define Nk 8
+#define Nr           14
+#define Nk           8
+#define KEY_SIZE     32
+#define EXP_KEY_SIZE 240
 #else 
-	#define Nr 10 // Number of rounds
-	#define Nk 4  // Size of round key (number of 32-bit words)
+#define Nr           10 // Number of rounds
+#define Nk           4  // Size of round key (number of 32-bit words)
+#define KEY_SIZE	 16	
+#define EXP_KEY_SIZE 176
 #endif
 
 #define Nb 4 // number of columns in a state 
+#define BLOCK_SIZE (Nb << 2)
 
 #define SCOPE(x) {x}
 
@@ -181,25 +189,141 @@ static void add_rk(uint8_t round, uint8_t* state, const uint8_t* rkey)
 	for (int i = 0; i < Nb * Nb; i++)
 		state[i] ^= rkey[i];
 }
-
+// rotate left
 static void shift_rows(uint8_t* state)
 {
+	uint8_t temp;
+	
+	// row 1
+	temp                = state[Nb * 1];
+	state[Nb * 1]       = state[(Nb * 1) + 1];
+	state[(Nb * 1) + 1] = state[(Nb * 1) + 2];
+	state[(Nb * 1) + 2] = state[(Nb * 1) + 3];
+	state[(Nb * 1) + 3] = temp;
 
+	// row 2
+	temp                = state[Nb * 2];
+	state[Nb * 2]       = state[(Nb * 2) + 2];
+	state[(Nb * 2) + 2] = temp;
+	temp                = state[(Nb * 2) + 1];
+	state[(Nb * 2) + 1] = state[(Nb * 2) + 3];
+	state[(Nb * 2) + 3] = temp;
+	
+	// row 3
+	temp                = state[Nb * 3];
+	state[Nb * 3]       = state[(Nb * 3) + 3];
+	state[(Nb * 3) + 3] = state[(Nb * 3) + 2];
+	state[(Nb * 3) + 2] = state[(Nb * 3) + 1];
+	state[(Nb * 3) + 1] = temp;
 }
+
+/* From the official Linux Kernel Generic AES library module */
+/* https://www.github.com/torvalds/linux */
+
+static uint32_t mul_by_x(uint32_t w)
+{
+	uint32_t x = w & 0x7f7f7f7f;
+	uint32_t y = w & 0x80808080;
+
+	/* multiply by polynomial 'x' (0b10) in GF(2^8) */
+	return (x << 1) ^ (y >> 7) * 0x1b;
+}
+
+static uint32_t mul_by_x2(uint32_t w)
+{
+	uint32_t x = w & 0x3f3f3f3f;
+	uint32_t y = w & 0x80808080;
+	uint32_t z = w & 0x40404040;
+
+	/* multiply by polynomial 'x^2' (0b100) in GF(2^8) */
+	return (x << 2) ^ (y >> 7) * 0x36 ^ (z >> 6) * 0x1b;
+}
+// rotate right
+static uint32_t ror32(uint32_t x, unsigned int count)
+{
+	return (x >> count) | (x << (32 - count));
+}
+
+static uint32_t mix_col(uint32_t w) 
+{
+	/*
+	 * Perform the following matrix multiplication in GF(2^8)
+	 *
+	 * | 0x2 0x3 0x1 0x1 |   | x[0] |
+	 * | 0x1 0x2 0x3 0x1 |   | x[1] |
+	 * | 0x1 0x1 0x2 0x3 | x | x[2] |
+	 * | 0x3 0x1 0x1 0x2 |   | x[3] |
+	 */
+	uint32_t y = mul_by_x(w) ^ ror32(w, 16);
+
+	return y ^ ror32(w ^ y, 8);
+};
+
+#define COLTOW(arr, x, y, z, w) (arr[x]) ^	\
+						  (arr[y] << 8) ^	\
+					      (arr[z] << 16) ^	\
+						  (arr[w] << 24);	\
 
 static void mix_columns(uint8_t* state)
 {
+	for (int i = 0; i < 4; i++)
+	{
+		uint32_t w = COLTOW(state, i, i + Nb, i + (Nb * 2), i + (Nb * 3));
 
+		w = mix_col(w);
+		state[i]            = w & 0xff;
+		state[i + Nb]       = (w >> 8) & 0xff;
+		state[i + (Nb * 2)] = (w >> 16) & 0xff;
+		state[i + (Nb * 3)] = (w >> 24) & 0xff;
+	}
 }
 
+// rotate right
 static void inv_shift_rows(uint8_t* state)
 {
+	uint8_t temp;
 
+	// row 1
+	temp                = state[(Nb * 1) + 3];
+	state[(Nb * 1) + 3] = state[(Nb * 1) + 2];
+	state[(Nb * 1) + 2] = state[(Nb * 1) + 1];
+	state[(Nb * 1) + 1] = state[Nb * 1];
+	state[Nb * 1]       = temp;
+
+	// row 2
+	temp                = state[Nb * 2];
+	state[Nb * 2]       = state[(Nb * 2) + 2];
+	state[(Nb * 2) + 2] = temp;
+	temp                = state[(Nb * 2) + 1];
+	state[(Nb * 2) + 1] = state[(Nb * 2) + 3];
+	state[(Nb * 2) + 3] = temp;
+
+	// row 3
+	temp                = state[Nb * 3];
+	state[Nb * 3]       = state[(Nb * 3) + 1];
+	state[(Nb * 3) + 1] = state[(Nb * 3) + 2];
+	state[(Nb * 3) + 2] = state[(Nb * 3) + 3];
+	state[(Nb * 3) + 3] = temp;
 }
 
 static void inv_mix_columns(uint8_t* state)
 {
+	auto inv_mix_col = [](uint32_t w) {
+		uint32_t y = mul_by_x2(w);
 
+		return mix_col(w ^ y ^ ror32(y, 16));
+	};
+
+	for (int i = 0; i < 4; i++)
+	{
+		uint32_t w = COLTOW(state, i, i + Nb, i + (Nb * 2), i + (Nb * 3));
+
+		w = inv_mix_col(w);
+		state[i]            = w & 0xff;
+		state[i + Nb]       = (w >> 8) & 0xff;
+		state[i + (Nb * 2)] = (w >> 16) & 0xff;
+		state[i + (Nb * 3)] = (w >> 24) & 0xff;
+	}
 }
 
 static void cipher(uint8_t* state, const uint8_t* key)
@@ -245,6 +369,6 @@ namespace AES {
 		inv_cipher(buf, key);
 	}
 
-}
+} // namespace AES
 
 #endif // _AES_
