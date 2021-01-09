@@ -8,28 +8,44 @@
 #include <climits>
 
 #ifdef AES192
-#define Nr           12
-#define Nk           6
-#define KEY_SIZE     24	
-#define EXP_KEY_SIZE 208
+#	define Nr           (12)
+#	define Nk           (6)
+#	define KEY_SIZE     (24)	
+#	define EXP_KEY_SIZE (208)
 #elif defined(AES256)
-#define Nr           14
-#define Nk           8
-#define KEY_SIZE     32
-#define EXP_KEY_SIZE 240
-#else 
-#define Nr           10 // Number of rounds
-#define Nk           4  // Size of round key (number of 32-bit words)
-#define KEY_SIZE	 16	
-#define EXP_KEY_SIZE 176
+#	define Nr           (14)
+#	define Nk           (8)
+#	define KEY_SIZE     (32)
+#	define EXP_KEY_SIZE (240)
+#else						  // Default is AES128
+#	define Nr           (10) // Number of rounds
+#	define Nk           (4)  // Size of round key (number of 32-bit words)
+#	define KEY_SIZE	 (16)	
+#	define EXP_KEY_SIZE (176)
 #endif
 
-#define Nb 4 // number of columns in a state 
+#define Nb (4) // number of columns in a state 
 #define BLOCK_SIZE (Nb << 2)
 
 #define SCOPE(x) {x}
 
-/// AES header library ///
+#include <stdio.h>
+#define PRINT_STATE(msg, state) \
+printf("%s : ", msg);           \
+for (int i = 0; i < 16; i++)    \
+	printf("%x ", state[i]);     \
+printf("\n");                   \
+
+////////////////////////////////////////////////////////////////
+/// 
+///        AES (128, 192, 156) Header Library
+///	   	   Mode: EBC
+/// 
+////////////////////////////////////////////////////////////////
+
+struct aes_key_ctx {
+	uint8_t exp_key[EXP_KEY_SIZE];
+};
 
 // Forward S-box
 static constexpr uint8_t sbox[] =
@@ -184,10 +200,10 @@ static void key_expand(const uint8_t* key_in, uint8_t* key_out)
 	}
 }
 
-static void add_rk(uint8_t round, uint8_t* state, const uint8_t* rkey)
+static void add_rk(uint8_t r, uint8_t* state, const uint8_t* rkey)
 {
-	for (int i = 0; i < Nb * Nb; i++)
-		state[i] ^= rkey[i];
+	for (int i = 0; i < Nb * 4; i++) 
+		state[i] ^= rkey[i + (r * Nk) + ((i / Nk) * (EXP_KEY_SIZE / 4))];
 }
 // rotate left
 static void shift_rows(uint8_t* state)
@@ -359,14 +375,19 @@ static void inv_cipher(uint8_t* state, const uint8_t* key)
 
 namespace AES { 
 
-	void encrypt(unsigned char* buf, unsigned char* key)
+	void set_key(aes_key_ctx* ctx, unsigned char* key)
 	{
-		cipher(buf, key);
+		key_expand(key, ctx->exp_key);
 	}
 
-	void decrypt(unsigned char* buf, unsigned char* key)
+	void encrypt(unsigned char* buf, aes_key_ctx* ctx)
 	{
-		inv_cipher(buf, key);
+		cipher(buf, ctx->exp_key);
+	}
+
+	void decrypt(unsigned char* buf, aes_key_ctx* ctx)
+	{
+		inv_cipher(buf, ctx->exp_key);
 	}
 
 } // namespace AES
