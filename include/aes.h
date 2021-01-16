@@ -3,9 +3,15 @@
 #ifndef _AES_
 #define _AES_
 
-#include <cstdint>
-#include <cstring>
-#include <climits>
+#ifdef __cplusplus
+#	include <cstdint>
+#	include <cstring>
+#	include <climits>
+#else
+#	include <stdint.h>
+#	include <string.h>
+#	include <limits.h>
+#endif
 
 #ifdef AES192
 #	define Nr           (12)
@@ -17,11 +23,17 @@
 #	define Nk           (8)
 #	define KEY_SIZE     (32)
 #	define EXP_KEY_SIZE (240)
-#else						  // Default is AES128
+#else						 // Default is AES128
 #	define Nr           (10) // Number of rounds
 #	define Nk           (4)  // Size of round key (number of 32-bit words)
-#	define KEY_SIZE	 (16)	
+#	define KEY_SIZE	    (16)	
 #	define EXP_KEY_SIZE (176)
+#endif
+
+#ifdef __cplusplus
+#	define CONSTEXPR constexpr
+#else
+#	define CONSTEXPR
 #endif
 
 #define Nb (4) // number of columns in a state 
@@ -48,7 +60,7 @@ struct aes_key_ctx {
 };
 
 // Forward S-box
-static constexpr uint8_t sbox[] =
+static CONSTEXPR uint8_t sbox[] =
 { 
 	0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
 	0xCA, 0x82, 0xC9, 0x7D, 0xFA, 0x59, 0x47, 0xF0, 0xAD, 0xD4, 0xA2, 0xAF, 0x9C, 0xA4, 0x72, 0xC0,
@@ -69,7 +81,7 @@ static constexpr uint8_t sbox[] =
 };
 
 // Inverse S-box
-static constexpr uint8_t inv_sbox[] =
+static CONSTEXPR uint8_t inv_sbox[] =
 { 
 	0x52, 0x09, 0x6A, 0xD5, 0x30, 0x36, 0xA5, 0x38, 0xBF, 0x40, 0xA3, 0x9E, 0x81, 0xF3, 0xD7, 0xFB,
 	0x7C, 0xE3, 0x39, 0x82, 0x9B, 0x2F, 0xFF, 0x87, 0x34, 0x8E, 0x43, 0x44, 0xC4, 0xDE, 0xE9, 0xCB,
@@ -90,7 +102,7 @@ static constexpr uint8_t inv_sbox[] =
 };
 
 // Round constant
-static constexpr uint8_t rcon[] =
+static CONSTEXPR uint8_t rcon[] =
 {
 	 0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36
 };
@@ -102,6 +114,7 @@ static inline void subb(uint8_t state[Nb * Nb])
 		state[i] = sbox[state[i]];
 	}
 }
+
 static inline void inv_subb(uint8_t state[Nb * Nb])
 {
 	for (int i = 0; i < Nb * Nb; i++)
@@ -202,9 +215,16 @@ static void key_expand(const uint8_t* key_in, uint8_t* key_out)
 
 static void add_rk(uint8_t r, uint8_t* state, const uint8_t* rkey)
 {
-	for (int i = 0; i < Nb * 4; i++) 
-		state[i] ^= rkey[i + (r * Nk) + ((i / Nk) * (EXP_KEY_SIZE / 4))];
+	unsigned nrows, row, idx;
+	for (int i = 0; i < Nb * 4; i++)
+	{
+		nrows = i / Nk;
+		row = nrows * (EXP_KEY_SIZE / 4);
+		idx = row + (i - (nrows * 4));
+		state[i] ^= rkey[idx + (r * Nk)]; 
+	}
 }
+
 // rotate left
 static void shift_rows(uint8_t* state)
 {
@@ -233,7 +253,8 @@ static void shift_rows(uint8_t* state)
 	state[(Nb * 3) + 1] = temp;
 }
 
-/* From the official Linux Kernel Generic AES library module */
+/* Generic mathematical helper functions mul_by_x and mul_by_x2 are from the official */
+/* Linux Kernel Generic AES library module */
 /* https://www.github.com/torvalds/linux */
 
 static uint32_t mul_by_x(uint32_t w)
@@ -254,6 +275,7 @@ static uint32_t mul_by_x2(uint32_t w)
 	/* multiply by polynomial 'x^2' (0b100) in GF(2^8) */
 	return (x << 2) ^ (y >> 7) * 0x36 ^ (z >> 6) * 0x1b;
 }
+
 // rotate right
 static uint32_t ror32(uint32_t x, unsigned int count)
 {
@@ -275,7 +297,7 @@ static uint32_t mix_col(uint32_t w)
 	return y ^ ror32(w ^ y, 8);
 };
 
-#define COLTOW(arr, x, y, z, w) (arr[x]) ^	\
+#define COL_TO_WORD(arr, x, y, z, w) (arr[x]) ^	\
 						  (arr[y] << 8) ^	\
 					      (arr[z] << 16) ^	\
 						  (arr[w] << 24) 	\
@@ -284,7 +306,7 @@ static void mix_columns(uint8_t* state)
 {
 	for (int i = 0; i < 4; i++)
 	{
-		uint32_t w = COLTOW(state, i, i + Nb, i + (Nb * 2), i + (Nb * 3));
+		uint32_t w = COL_TO_WORD(state, i, i + Nb, i + (Nb * 2), i + (Nb * 3));
 
 		w = mix_col(w);
 		state[i]            = w & 0xff;
@@ -332,7 +354,7 @@ static void inv_mix_columns(uint8_t* state)
 
 	for (int i = 0; i < 4; i++)
 	{
-		uint32_t w = COLTOW(state, i, i + Nb, i + (Nb * 2), i + (Nb * 3));
+		uint32_t w = COL_TO_WORD(state, i, i + Nb, i + (Nb * 2), i + (Nb * 3));
 
 		w = inv_mix_col(w);
 		state[i]            = w & 0xff;
