@@ -31,7 +31,7 @@
 #endif
 
 #ifdef __cplusplus
-#	define CONSTEXPR constexpr
+#	define AES_CONSTEXPR constexpr
 #else
 #	define CONSTEXPR
 #endif
@@ -55,12 +55,12 @@ printf("\n");                   \
 /// 
 ////////////////////////////////////////////////////////////////
 
-struct aes_key_ctx {
+typedef struct aes_key_ctx {
 	uint8_t exp_key[EXP_KEY_SIZE];
-};
+} aes_key_ctx;
 
 // Forward S-box
-static CONSTEXPR uint8_t sbox[] =
+static AES_CONSTEXPR uint8_t sbox[] =
 { 
 	0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
 	0xCA, 0x82, 0xC9, 0x7D, 0xFA, 0x59, 0x47, 0xF0, 0xAD, 0xD4, 0xA2, 0xAF, 0x9C, 0xA4, 0x72, 0xC0,
@@ -81,7 +81,7 @@ static CONSTEXPR uint8_t sbox[] =
 };
 
 // Inverse S-box
-static CONSTEXPR uint8_t inv_sbox[] =
+static AES_CONSTEXPR uint8_t inv_sbox[] =
 { 
 	0x52, 0x09, 0x6A, 0xD5, 0x30, 0x36, 0xA5, 0x38, 0xBF, 0x40, 0xA3, 0x9E, 0x81, 0xF3, 0xD7, 0xFB,
 	0x7C, 0xE3, 0x39, 0x82, 0x9B, 0x2F, 0xFF, 0x87, 0x34, 0x8E, 0x43, 0x44, 0xC4, 0xDE, 0xE9, 0xCB,
@@ -102,7 +102,7 @@ static CONSTEXPR uint8_t inv_sbox[] =
 };
 
 // Round constant
-static CONSTEXPR uint8_t rcon[] =
+static AES_CONSTEXPR uint8_t rcon[] =
 {
 	 0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36
 };
@@ -133,7 +133,7 @@ static inline void subw(uint8_t word[4])
 
 static inline void rotword(uint8_t word[4])
 {
-	uint8_t temp[4];
+	uint8_t temp[4]; 
 	temp[0] = word[1];
 	temp[1] = word[2];
 	temp[2] = word[3];
@@ -344,14 +344,15 @@ static void inv_shift_rows(uint8_t* state)
 	state[(Nb * 3) + 3] = temp;
 }
 
-static void inv_mix_columns(uint8_t* state)
+static uint32_t inv_mix_col(uint32_t w)
 {
-	auto inv_mix_col = [](uint32_t w) {
-		uint32_t y = mul_by_x2(w);
+	uint32_t y = mul_by_x2(w);
 
-		return mix_col(w ^ y ^ ror32(y, 16));
-	};
+	return mix_col(w ^ y ^ ror32(y, 16));
+}
 
+static uint32_t inv_mix_columns(uint8_t* state)
+{
 	for (int i = 0; i < 4; i++)
 	{
 		uint32_t w = COL_TO_WORD(state, i, i + Nb, i + (Nb * 2), i + (Nb * 3));
@@ -395,8 +396,9 @@ static void inv_cipher(uint8_t* state, const uint8_t* key)
 	}
 }
 
-namespace AES { 
-
+#ifdef __cplusplus
+namespace aes { 
+#endif
 	void set_key(aes_key_ctx* ctx, unsigned char* key)
 	{
 		key_expand(key, ctx->exp_key);
@@ -411,7 +413,8 @@ namespace AES {
 	{
 		inv_cipher(buf, ctx->exp_key);
 	}
-
+#ifdef __cplusplus
 } // namespace AES
+#endif
 
 #endif // _AES_

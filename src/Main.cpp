@@ -2,7 +2,7 @@
 
 #include "../include/aes.h"
 //#include "aes/aes_test.h"
-#include <Windows.h>
+//#include <Windows.h>
 
 int main()
 {
@@ -23,11 +23,9 @@ int main()
 	int res = row + (i - (row_count * Nk));
 	int idx = res + (r * Nk);
 
-	add_rk(0, buf, key);
-
-	//aes_key_ctx ctx;
-	//AES::set_key(&ctx, key);
-	//AES::encrypt(buf, &ctx);
+	aes_key_ctx ctx;
+	aes::set_key(&ctx, key);
+	aes::encrypt(buf, &ctx);
 
 	for (int i = 0; i < 16; i++)
 		std::cout << (int)buf[i] << " ";
