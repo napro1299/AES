@@ -3,15 +3,9 @@
 #ifndef _AES_
 #define _AES_
 
-#ifdef __cplusplus
-#	include <cstdint>
-#	include <cstring>
-#	include <climits>
-#else
-#	include <stdint.h>
-#	include <string.h>
-#	include <limits.h>
-#endif
+#include <stdint.h>
+#include <string.h>
+#include <limits.h>
 
 #ifdef AES192
 #	define Nr           (12)
@@ -30,23 +24,21 @@
 #	define EXP_KEY_SIZE (176)
 #endif
 
-#ifdef __cplusplus
-#	define AES_CONSTEXPR constexpr
-#else
-#	define CONSTEXPR
-#endif
-
 #define Nb (4) // number of columns in a state 
 #define BLOCK_SIZE (Nb << 2)
 
 #define SCOPE(x) {x}
 
+#define PRINT_STATE NULL
+
+#if defined PRINT_STATE && (PRINT_STATE == NULL)
 #include <stdio.h>
 #define PRINT_STATE(msg, state) \
 printf("%s : ", msg);           \
 for (int i = 0; i < 16; i++)    \
 	printf("%x ", state[i]);     \
-printf("\n");                   \
+printf("\n");                   
+#endif
 
 ////////////////////////////////////////////////////////////////
 /// 
@@ -55,12 +47,15 @@ printf("\n");                   \
 /// 
 ////////////////////////////////////////////////////////////////
 
+/*
+* AES context struct
+*/
 typedef struct aes_key_ctx {
 	uint8_t exp_key[EXP_KEY_SIZE];
 } aes_key_ctx;
 
 // Forward S-box
-static AES_CONSTEXPR uint8_t sbox[] =
+static const uint8_t sbox[] =
 { 
 	0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
 	0xCA, 0x82, 0xC9, 0x7D, 0xFA, 0x59, 0x47, 0xF0, 0xAD, 0xD4, 0xA2, 0xAF, 0x9C, 0xA4, 0x72, 0xC0,
@@ -81,7 +76,7 @@ static AES_CONSTEXPR uint8_t sbox[] =
 };
 
 // Inverse S-box
-static AES_CONSTEXPR uint8_t inv_sbox[] =
+static const uint8_t inv_sbox[] =
 { 
 	0x52, 0x09, 0x6A, 0xD5, 0x30, 0x36, 0xA5, 0x38, 0xBF, 0x40, 0xA3, 0x9E, 0x81, 0xF3, 0xD7, 0xFB,
 	0x7C, 0xE3, 0x39, 0x82, 0x9B, 0x2F, 0xFF, 0x87, 0x34, 0x8E, 0x43, 0x44, 0xC4, 0xDE, 0xE9, 0xCB,
@@ -102,7 +97,7 @@ static AES_CONSTEXPR uint8_t inv_sbox[] =
 };
 
 // Round constant
-static AES_CONSTEXPR uint8_t rcon[] =
+static const uint8_t rcon[] =
 {
 	 0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36
 };
@@ -141,47 +136,6 @@ static inline void rotword(uint8_t word[4])
 	
 	memcpy(word, temp, 4);
 }
-
-// 4x4 - 128
-// 4x6 - 192
-// 4x8 - 256
-#if 0
-static void MakeRoundKey(uint8_t src[Nk * 4], uint8_t dest[Nk * 4], uint8_t key_index)
-{
-	uint8_t word[4];
-	
-	word[0] = src[Nk - 1];
-	word[1] = src[(Nk * 2) - 1];
-	word[2] = src[(Nk * 3) - 1];
-	word[3] = src[(Nk * 4) - 1];
-	
-	RotWord(word);
-	SubBytes<4>(word);
-	  
-	word[0] = src[0]      ^ word[0] ^ rcon[key_index]; // TODO: Investigate Rcon mechanics
-	word[1] = src[Nk]     ^ word[1];
-	word[2] = src[Nk * 2] ^ word[2];
-	word[3] = src[Nk * 3] ^ word[3];
-
-	dest[0]      = word[0];
-	dest[Nk]     = word[1];
-	dest[Nk * 2] = word[2];
-	dest[Nk * 3] = word[3];
-
-	for (int i = 1; i < 4; i++)
-	{
-		word[0] = word[0] ^ src[i];
-		word[1] = word[1] ^ src[i + Nk];
-		word[2] = word[2] ^ src[i + (Nk * 2)];
-		word[3] = word[3] ^ src[i + (Nk * 3)];
-
-		dest[i] = word[0];
-		dest[i + Nk] = word[1];
-		dest[i + (Nk * 2)] = word[2];
-		dest[i + (Nk * 3)] = word[3];
-	}
-}
-#endif
 
 static void key_expand(const uint8_t* key_in, uint8_t* key_out) 
 {
@@ -396,25 +350,19 @@ static void inv_cipher(uint8_t* state, const uint8_t* key)
 	}
 }
 
-#ifdef __cplusplus
-namespace aes { 
-#endif
-	void set_key(aes_key_ctx* ctx, unsigned char* key)
-	{
-		key_expand(key, ctx->exp_key);
-	}
+void aes_set_key(aes_key_ctx* ctx, unsigned char* key)
+{
+	key_expand(key, ctx->exp_key);
+}
 
-	void encrypt(unsigned char* buf, aes_key_ctx* ctx)
-	{
-		cipher(buf, ctx->exp_key);
-	}
+void aes_encrypt(unsigned char* buf, aes_key_ctx* ctx)
+{
+	cipher(buf, ctx->exp_key);
+}
 
-	void decrypt(unsigned char* buf, aes_key_ctx* ctx)
-	{
-		inv_cipher(buf, ctx->exp_key);
-	}
-#ifdef __cplusplus
-} // namespace AES
-#endif
+void aes_decrypt(unsigned char* buf, aes_key_ctx* ctx)
+{
+	inv_cipher(buf, ctx->exp_key);
+}
 
 #endif // _AES_
